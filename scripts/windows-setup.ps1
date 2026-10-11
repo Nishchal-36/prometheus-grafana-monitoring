@@ -66,10 +66,12 @@ function Expand-Download {
     param([string] $Url, [string] $DownloadPath, [string] $Destination)
     New-Item -ItemType Directory -Force -Path $Destination | Out-Null
     if ($Url -match "\.zip$") {
+        if ($DownloadPath -notmatch "\.zip$") { $DownloadPath += ".zip" }
         Get-FileWithRetry -Url $Url -OutFile $DownloadPath
         Expand-Archive -Path $DownloadPath -DestinationPath $Destination -Force
     }
     elseif ($Url -match "\.tar\.gz$") {
+        if ($DownloadPath -notmatch "\.tar\.gz$") { $DownloadPath += ".tar.gz" }
         Get-FileWithRetry -Url $Url -OutFile $DownloadPath
         tar.exe -xzf $DownloadPath -C $Destination
     }
