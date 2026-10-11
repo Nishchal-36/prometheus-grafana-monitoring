@@ -12,9 +12,16 @@ loki.write "remote" {
   }
 }
 
-loki.source.windows_events "eventlog" {
-  eventlog_names = ["Application", "System"]
-  forward_to     = [loki.write.remote.receiver]
+loki.source.windowsevent "application" {
+  eventlog_name = "Application"
+  labels        = { server = "__SERVER_NAME__", source = "eventlog" }
+  forward_to    = [loki.write.remote.receiver]
+}
+
+loki.source.windowsevent "system" {
+  eventlog_name = "System"
+  labels        = { server = "__SERVER_NAME__", source = "eventlog" }
+  forward_to    = [loki.write.remote.receiver]
 }
 
 loki.source.file "nginx_access" {
