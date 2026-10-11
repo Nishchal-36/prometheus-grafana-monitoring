@@ -91,7 +91,9 @@ function Install-WinSWService {
     New-Item -ItemType Directory -Force -Path $svcDir | Out-Null
     $svcExe = Join-Path $svcDir "$Name.exe"
     $svcXml = Join-Path $svcDir "$Name.xml"
-    Copy-Item (Join-Path $ToolsDir "winsw.exe") $svcExe -Force
+    if (-not (Test-Path $svcExe)) {
+        Copy-Item (Join-Path $ToolsDir "winsw.exe") $svcExe -Force
+    }
 
     $argsXml = ""
     if ($Arguments) {
@@ -201,6 +203,10 @@ Install-WinSWService -Name "node-app" -Exe $nodeExe -Arguments "server.js" -Work
 Write-Step "nginx-prometheus-exporter"
 $npeUrl = Get-GitHubAssetUrl -Repo "nginx/nginx-prometheus-exporter" -Tag "v1.5.3" -Pattern "windows_amd64\.zip$"
 $npeDir = Join-Path $ToolsDir "nginx-exporter"
+if (Get-Service -Name "nginx-exporter" -ErrorAction SilentlyContinue) {
+    & (Join-Path $ToolsDir "services\nginx-exporter.exe") stop 2>$null | Out-Null
+    Start-Sleep -Seconds 2
+}
 Remove-Item -Recurse -Force $npeDir -ErrorAction SilentlyContinue
 Expand-Download -Url $npeUrl -DownloadPath (Join-Path $SetupDir "npe.archive") -Destination $npeDir
 $npeExe = Get-ChildItem $npeDir -Recurse -Filter "nginx-prometheus-exporter.exe" | Select-Object -First 1
