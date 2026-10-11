@@ -280,7 +280,7 @@ resource "azurerm_virtual_machine_extension" "web_setup" {
   })
 
   protected_settings = jsonencode({
-    commandToExecute = "powershell.exe -ExecutionPolicy Bypass -File windows-setup.ps1 -RepoRawBase '${var.repo_raw_base}' -LokiUrl 'http://${azurerm_linux_virtual_machine.monitoring.private_ip_address}:3100' -ServerName '${azurerm_windows_virtual_machine.web[count.index].name}'"
+    commandToExecute = "powershell.exe -ExecutionPolicy Bypass -File windows-setup.ps1 -RepoRawBase \"${var.repo_raw_base}\" -LokiUrl \"http://${azurerm_linux_virtual_machine.monitoring.private_ip_address}:3100\" -ServerName \"${azurerm_windows_virtual_machine.web[count.index].name}\""
   })
 }
 

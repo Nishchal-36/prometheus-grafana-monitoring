@@ -25,6 +25,12 @@ $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# Defensive: powershell.exe -File may keep wrapping quotes as part of the value
+# depending on how the caller quotes the arguments.
+$RepoRawBase = $RepoRawBase.Trim([char]39, [char]34)
+$LokiUrl     = $LokiUrl.Trim([char]39, [char]34)
+$ServerName  = $ServerName.Trim([char]39, [char]34)
+
 $SetupDir = "C:\setup"
 New-Item -ItemType Directory -Force -Path $SetupDir, $LogDir, $ToolsDir, $AppDir | Out-Null
 Start-Transcript -Path (Join-Path $SetupDir "setup.log") -Append | Out-Null
