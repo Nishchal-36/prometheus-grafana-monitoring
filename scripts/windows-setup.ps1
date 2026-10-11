@@ -177,6 +177,8 @@ if (Get-Service -Name "nginx" -ErrorAction SilentlyContinue) {
     & (Join-Path $ToolsDir "services\nginx.exe") stop 2>$null | Out-Null
     Start-Sleep -Seconds 3
 }
+Stop-Process -Name "nginx" -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
 Remove-Item -Recurse -Force $NginxDir -ErrorAction SilentlyContinue
 $nginxExtracted = Join-Path $SetupDir "nginx-1.30.5"
 if (Test-Path $nginxExtracted) {
