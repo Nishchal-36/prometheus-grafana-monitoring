@@ -96,7 +96,7 @@ resource "azurerm_network_security_group" "web" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_port_range          = "*"
-    destination_port_range     = "3000,9113,9182"
+    destination_port_ranges    = ["3000", "9113", "9182"]
     source_address_prefix      = "10.0.2.0/24"
     destination_address_prefix = "*"
   }

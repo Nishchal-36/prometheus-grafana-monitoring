@@ -70,27 +70,58 @@ function Expand-Download {
     else { throw "Unsupported archive type: $Url" }
 }
 
-function Set-NssmService {
-    param([string] $Name, [string] $Exe, [string] $Arguments = "", [string] $WorkDir = "")
-    $nssm = Join-Path $ToolsDir "nssm.exe"
-    $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
-    if (-not $svc) {
-        & $nssm install $Name $Exe | Out-Null
+function Install-WinSWService {
+    param(
+        [string] $Name,
+        [string] $Exe,
+        [string] $Arguments = "",
+        [string] $WorkDir = "",
+        [string] $Description = "",
+        [hashtable] $EnvVars = @{}
+    )
+    $svcDir = Join-Path $ToolsDir "services"
+    New-Item -ItemType Directory -Force -Path $svcDir | Out-Null
+    $svcExe = Join-Path $svcDir "$Name.exe"
+    $svcXml = Join-Path $svcDir "$Name.xml"
+    Copy-Item (Join-Path $ToolsDir "winsw.exe") $svcExe -Force
+
+    $argsXml = ""
+    if ($Arguments) {
+        $argsXml = "  <arguments>$([System.Security.SecurityElement]::Escape($Arguments))</arguments>"
     }
-    & $nssm set $Name Application $Exe | Out-Null
-    if ($Arguments) { & $nssm set $Name AppParameters $Arguments | Out-Null }
-    if ($WorkDir)   { & $nssm set $Name AppDirectory $WorkDir | Out-Null }
-    & $nssm set $Name Start SERVICE_AUTO_START | Out-Null
-    & $nssm set $Name AppStdout (Join-Path $LogDir "$Name.out.log") | Out-Null
-    & $nssm set $Name AppStderr (Join-Path $LogDir "$Name.err.log") | Out-Null
-    & $nssm set $Name AppRotateFiles 1 | Out-Null
-    & $nssm set $Name AppExit Default Restart | Out-Null
-    if ($svc -and $svc.Status -ne "Stopped") {
-        & $nssm restart $Name | Out-Null
+    $envXml = ""
+    foreach ($key in $EnvVars.Keys) {
+        $envXml += ('  <env name="{0}" value="{1}"/>' -f $key, [System.Security.SecurityElement]::Escape([string]$EnvVars[$key])) + "`n"
+    }
+
+    $xml = @"
+<service>
+  <id>$Name</id>
+  <name>$Name</name>
+  <description>$Description</description>
+  <executable>$Exe</executable>
+$argsXml
+  <workingdirectory>$WorkDir</workingdirectory>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="10 sec"/>
+  <logpath>$LogDir</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>4</keepFiles>
+  </log>
+$envXml</service>
+"@
+    Set-Content -Path $svcXml -Value $xml -Encoding UTF8
+
+    if (Get-Service -Name $Name -ErrorAction SilentlyContinue) {
+        & $svcExe stop 2>$null | Out-Null
+        Start-Sleep -Seconds 2
     }
     else {
-        & $nssm start $Name | Out-Null
+        & $svcExe install | Out-Null
+        Start-Sleep -Seconds 2
     }
+    & $svcExe start | Out-Null
 }
 
 function Add-FirewallRuleIfMissing {
@@ -102,10 +133,9 @@ function Add-FirewallRuleIfMissing {
 }
 
 # -----------------------------------------------------------------------------
-Write-Step "Base tooling (NSSM)"
-$nssmZip = Join-Path $SetupDir "nssm.zip"
-Expand-Download -Url "https://nssm.cc/release/nssm-2.24.zip" -DownloadPath $nssmZip -Destination (Join-Path $SetupDir "nssm")
-Copy-Item (Join-Path $SetupDir "nssm\nssm-2.24\win64\nssm.exe") (Join-Path $ToolsDir "nssm.exe") -Force
+Write-Step "Base tooling (WinSW service wrapper)"
+$winswUrl = Get-GitHubAssetUrl -Repo "winsw/winsw" -Tag "v2.12.0" -Pattern "WinSW-x64\.exe$"
+Get-FileWithRetry -Url $winswUrl -OutFile (Join-Path $ToolsDir "winsw.exe")
 
 # -----------------------------------------------------------------------------
 Write-Step "Node.js 24 LTS"
@@ -133,8 +163,9 @@ Start-Process msiexec.exe -ArgumentList "/i", $weMsi, "/qn", "/norestart" -Wait
 Write-Step "Nginx for Windows"
 $nginxZip = Join-Path $SetupDir "nginx.zip"
 Expand-Download -Url "https://nginx.org/download/nginx-1.30.5.zip" -DownloadPath $nginxZip -Destination $SetupDir
-if (Test-Path $NginxDir) {
-    & (Join-Path $ToolsDir "nssm.exe") stop nginx 2>$null | Out-Null
+if (Get-Service -Name "nginx" -ErrorAction SilentlyContinue) {
+    & (Join-Path $ToolsDir "services\nginx.exe") stop 2>$null | Out-Null
+    Start-Sleep -Seconds 3
 }
 Remove-Item -Recurse -Force $NginxDir -ErrorAction SilentlyContinue
 $nginxExtracted = Join-Path $SetupDir "nginx-1.30.5"
@@ -146,7 +177,7 @@ elseif (-not (Test-Path (Join-Path $NginxDir "nginx.exe"))) {
 }
 Get-FileWithRetry -Url "$RepoRawBase/windows/nginx.conf" -OutFile (Join-Path $NginxDir "conf\nginx.conf")
 New-Item -ItemType Directory -Force -Path (Join-Path $NginxDir "logs") | Out-Null
-Set-NssmService -Name "nginx" -Exe (Join-Path $NginxDir "nginx.exe") -WorkDir $NginxDir
+Install-WinSWService -Name "nginx" -Exe (Join-Path $NginxDir "nginx.exe") -WorkDir $NginxDir -Description "Nginx web server (monlab)"
 
 # -----------------------------------------------------------------------------
 Write-Step "Node.js demo app"
@@ -155,8 +186,8 @@ Get-FileWithRetry -Url "$RepoRawBase/app/package.json" -OutFile (Join-Path $AppD
 Push-Location $AppDir
 & $npmCmd install --omit=dev --no-audit --no-fund
 Pop-Location
-Set-NssmService -Name "node-app" -Exe $nodeExe -Arguments "server.js" -WorkDir $AppDir
-& (Join-Path $ToolsDir "nssm.exe") set node-app AppEnvironmentExtra "PORT=3000" "SERVER_NAME=$ServerName" | Out-Null
+Install-WinSWService -Name "node-app" -Exe $nodeExe -Arguments "server.js" -WorkDir $AppDir `
+    -Description "Node.js demo app (monlab)" -EnvVars @{ PORT = "3000"; SERVER_NAME = $ServerName }
 
 # -----------------------------------------------------------------------------
 Write-Step "nginx-prometheus-exporter"
@@ -166,7 +197,9 @@ Remove-Item -Recurse -Force $npeDir -ErrorAction SilentlyContinue
 Expand-Download -Url $npeUrl -DownloadPath (Join-Path $SetupDir "npe.archive") -Destination $npeDir
 $npeExe = Get-ChildItem $npeDir -Recurse -Filter "nginx-prometheus-exporter.exe" | Select-Object -First 1
 if (-not $npeExe) { throw "nginx-prometheus-exporter.exe not found after extraction" }
-Set-NssmService -Name "nginx-exporter" -Exe $npeExe.FullName -Arguments "-nginx.scrape-uri=http://127.0.0.1:8081/stub_status -web.listen-address=:9113" -WorkDir $npeExe.DirectoryName
+Install-WinSWService -Name "nginx-exporter" -Exe $npeExe.FullName `
+    -Arguments "-nginx.scrape-uri=http://127.0.0.1:8081/stub_status -web.listen-address=:9113" `
+    -WorkDir $npeExe.DirectoryName -Description "nginx-prometheus-exporter (monlab)"
 
 # -----------------------------------------------------------------------------
 Write-Step "Grafana Alloy (logs -> Loki)"
@@ -185,8 +218,9 @@ Get-FileWithRetry -Url "$RepoRawBase/windows/alloy/config.windows.alloy" -OutFil
 (Get-Content $alloyConfPath -Raw) `
     -replace "__LOKI_URL__", $LokiUrl `
     -replace "__SERVER_NAME__", $ServerName | Set-Content -Path $alloyConfPath -Encoding UTF8
-Set-NssmService -Name "alloy" -Exe (Join-Path $ToolsDir "alloy.exe") `
-    -Arguments "run --disable-reporting --storage.path=$AlloyData $alloyConfPath" -WorkDir $AlloyData
+Install-WinSWService -Name "alloy" -Exe (Join-Path $ToolsDir "alloy.exe") `
+    -Arguments "run --disable-reporting --storage.path=$AlloyData $alloyConfPath" -WorkDir $AlloyData `
+    -Description "Grafana Alloy log shipper (monlab)"
 
 # -----------------------------------------------------------------------------
 Write-Step "Firewall rules"
