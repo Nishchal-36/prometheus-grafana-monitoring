@@ -1,0 +1,22 @@
+groups:
+  - name: recording
+    rules:
+      # Pre-computed CPU usage (%) for the two Windows VMs - keeps dashboards fast.
+      - record: instance:windows_cpu_usage:percent
+        expr: 100 - (avg by (instance) (rate(windows_cpu_time_total{mode="idle"}[5m])) * 100)
+
+      # Pre-computed memory usage (%) for the two Windows VMs.
+      - record: instance:windows_memory_usage:percent
+        expr: 100 - 100 * (windows_memory_physical_free_bytes / windows_memory_physical_total_bytes)
+
+      # Pre-computed free disk (%) per volume on the Windows VMs.
+      - record: instance:windows_disk_free:percent
+        expr: 100 * (windows_logical_disk_free_bytes{volume=~".*:"} / windows_logical_disk_size_bytes{volume=~".*:"})
+
+      # App request rate per instance (all statuses).
+      - record: instance:http_requests:rate5m
+        expr: sum by (instance) (rate(http_requests_total[5m]))
+
+      # Demo jobs processed per second, per instance.
+      - record: instance:app_jobs:rate5m
+        expr: sum by (instance) (rate(app_jobs_processed_total[5m]))

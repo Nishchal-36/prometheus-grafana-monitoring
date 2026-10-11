@@ -1,0 +1,39 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: [alertname, instance]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+inhibit_rules:
+  - source_matchers: [severity = "critical"]
+    target_matchers: [severity = "warning"]
+    equal: [alertname, instance]
+
+receivers:
+  - name: default
+    # Nothing is wired up by default so the lab does not try to send mail.
+    # Enable ONE of the blocks below and reload:
+    #
+    # Email (Gmail example - use an App Password, never your real password):
+    # email_configs:
+    #   - to: "you@example.com"
+    #     from: "alerts@example.com"
+    #     smarthost: "smtp.gmail.com:587"
+    #     auth_username: "alerts@example.com"
+    #     auth_password: "your-app-password"
+    #     send_resolved: true
+    #
+    # Slack (incoming webhook):
+    # slack_configs:
+    #   - api_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+    #     channel: "#alerts"
+    #     send_resolved: true
+    #
+    # Generic webhook:
+    # webhook_configs:
+    #   - url: "https://your-webhook-endpoint"
+    #     send_resolved: true

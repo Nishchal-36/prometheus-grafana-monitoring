@@ -1,0 +1,22 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+terraform.tfvars
+.generated-credentials.txt
+monitoring_ssh_key.pem
+*.pem
+
+# Secrets / local env
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS / editors
+Thumbs.db
+.DS_Store
+.vscode/*
+!.vscode/extensions.json

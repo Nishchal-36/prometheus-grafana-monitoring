@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars and fill in.
+
+prefix   = "monlab"
+location = "centralindia"
+vm_size  = "Standard_B2ms"
+
+admin_username = "azureuser"
+
+# Leave empty to auto-detect your current public IP (recommended for local runs).
+allowed_ip = ""
+
+# After you push this repo to GitHub, put your username/repo here.
+repo_raw_base   = "https://raw.githubusercontent.com/YOUR_GITHUB_USER/prometheus-grafana-monitoring/main"
+github_repo_url = "https://github.com/YOUR_GITHUB_USER/prometheus-grafana-monitoring.git"
+
+# Optional tags
+# tags = { owner = "your-name" }

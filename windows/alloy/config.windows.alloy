@@ -1,0 +1,36 @@
+// Alloy on the Windows web VMs: ships Windows Event Logs + Nginx access/error
+// logs to Loki on the monitoring VM.
+// __LOKI_URL__ and __SERVER_NAME__ are replaced by scripts/windows-setup.ps1.
+
+logging {
+  level = "warn"
+}
+
+loki.write "remote" {
+  endpoint {
+    url = "__LOKI_URL__/loki/api/v1/push"
+  }
+}
+
+loki.source.windows_events "eventlog" {
+  eventlog_names = ["Application", "System"]
+  forward_to     = [loki.write.remote.receiver]
+}
+
+loki.source.file "nginx_access" {
+  targets = [{
+    __path__ = "C:\\nginx\\logs\\access.log",
+    job      = "nginx-access",
+    server   = "__SERVER_NAME__",
+  }]
+  forward_to = [loki.write.remote.receiver]
+}
+
+loki.source.file "nginx_error" {
+  targets = [{
+    __path__ = "C:\\nginx\\logs\\error.log",
+    job      = "nginx-error",
+    server   = "__SERVER_NAME__",
+  }]
+  forward_to = [loki.write.remote.receiver]
+}

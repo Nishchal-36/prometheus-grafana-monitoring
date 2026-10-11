@@ -1,0 +1,30 @@
+name: Deploy monitoring stack
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "monitoring/**"
+      - "windows/**"
+      - ".github/workflows/deploy-monitoring.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull latest config on the monitoring VM and restart the stack
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.MONITORING_HOST }}
+          username: ${{ secrets.MONITORING_USER }}
+          key: ${{ secrets.MONITORING_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/monitoring-repo
+            git pull --ff-only
+            cd monitoring
+            docker compose up -d
+            sleep 5
+            curl -fsS -X POST http://localhost:9090/-/reload
+            docker compose ps

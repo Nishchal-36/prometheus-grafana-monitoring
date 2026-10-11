@@ -1,0 +1,12 @@
+{
+  "name": "monlab-node-demo",
+  "version": "1.0.0",
+  "description": "Minimal Node.js demo app instrumented with prom-client for the Prometheus + Grafana lab",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "prom-client": "^15.1.3"
+  }
+}

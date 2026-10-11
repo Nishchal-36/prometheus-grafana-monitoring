@@ -1,0 +1,34 @@
+name: VM power control (cost saver)
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Deallocate (stop billing) or start all lab VMs"
+        required: true
+        default: "stop"
+        type: choice
+        options:
+          - stop
+          - start
+
+jobs:
+  power:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Apply power action to all VMs
+        run: |
+          if [ "${{ inputs.action }}" = "stop" ]; then
+            CMD="deallocate"
+          else
+            CMD="start"
+          fi
+          for vm in win-web-1 win-web-2 mon-linux-1; do
+            echo "az vm $CMD $vm"
+            az vm "$CMD" --resource-group rg-monlab-monitoring --name "$vm" --no-wait
+          done

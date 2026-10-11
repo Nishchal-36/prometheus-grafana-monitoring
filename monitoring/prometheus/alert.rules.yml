@@ -1,0 +1,104 @@
+groups:
+  - name: availability
+    rules:
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Target {{ $labels.instance }} ({{ $labels.job }}) is down"
+          description: "Prometheus has not been able to scrape {{ $labels.instance }} for more than 2 minutes."
+
+  - name: windows-system
+    rules:
+      - alert: WindowsHighCpu
+        expr: 100 - (avg by (instance) (rate(windows_cpu_time_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage has been above 85% for 10 minutes (current: {{ printf \"%.1f\" $value }}%)."
+
+      - alert: WindowsHighMemory
+        expr: 100 - 100 * (windows_memory_physical_free_bytes / windows_memory_physical_total_bytes) > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "More than 90% of physical memory is in use on {{ $labels.instance }}."
+
+      - alert: WindowsLowDisk
+        expr: 100 - 100 * (windows_logical_disk_free_bytes{volume=~".*:"} / windows_logical_disk_size_bytes{volume=~".*:"}) > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }} ({{ $labels.volume }})"
+          description: "Disk {{ $labels.volume }} on {{ $labels.instance }} is more than 85% full."
+
+  - name: linux-system
+    rules:
+      - alert: LinuxHighCpu
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage has been above 85% for 10 minutes."
+
+      - alert: LinuxHighMemory
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "More than 90% of memory is in use on {{ $labels.instance }}."
+
+      - alert: LinuxLowDisk
+        expr: 100 - 100 * (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}) < 15
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+          description: "Less than 15% free space left on {{ $labels.mountpoint }}."
+
+  - name: application
+    rules:
+      - alert: AppHighErrorRate
+        expr: |
+          sum by (instance) (rate(http_requests_total{status=~"5.."}[5m]))
+            /
+          clamp_min(sum by (instance) (rate(http_requests_total[5m])), 0.01)
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High 5xx error rate on {{ $labels.instance }}"
+          description: "More than 5% of requests are failing with 5xx on {{ $labels.instance }}."
+
+      - alert: AppSlowRequests
+        expr: histogram_quantile(0.95, sum by (le, instance) (rate(http_request_duration_seconds_bucket[5m]))) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow requests on {{ $labels.instance }}"
+          description: "p95 request latency is above 1.5s for 5 minutes on {{ $labels.instance }}."
+
+  - name: monitoring-self
+    rules:
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus config reload failed"
+          description: "The last configuration reload attempt on Prometheus failed."

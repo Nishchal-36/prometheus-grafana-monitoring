@@ -1,0 +1,34 @@
+#cloud-config
+package_update: true
+packages:
+  - git
+  - curl
+
+write_files:
+  - path: /opt/monstage/windows.json
+    permissions: "0644"
+    content: |
+      ${windows_targets_json}
+  - path: /opt/monstage/nginx.json
+    permissions: "0644"
+    content: |
+      ${nginx_targets_json}
+  - path: /opt/monstage/app.json
+    permissions: "0644"
+    content: |
+      ${app_targets_json}
+  - path: /opt/monstage/env
+    permissions: "0600"
+    content: |
+      GF_SECURITY_ADMIN_PASSWORD=${grafana_password}
+
+runcmd:
+  - "curl -fsSL https://get.docker.com | sh"
+  - "systemctl enable docker"
+  - "git clone ${repo_url} /opt/monitoring-repo || (cd /opt/monitoring-repo && git pull --ff-only)"
+  - "mkdir -p /opt/monitoring-repo/monitoring/prometheus/file_sd"
+  - "cp /opt/monstage/windows.json /opt/monstage/nginx.json /opt/monstage/app.json /opt/monitoring-repo/monitoring/prometheus/file_sd/"
+  - "cp /opt/monstage/env /opt/monitoring-repo/monitoring/.env"
+  - "cd /opt/monitoring-repo/monitoring && docker compose up -d"
+
+final_message: "Monitoring stack is up after $UPTIME seconds"

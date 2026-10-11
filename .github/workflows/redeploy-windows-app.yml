@@ -1,0 +1,35 @@
+name: Redeploy Windows app
+
+on:
+  workflow_dispatch:
+    inputs:
+      restart_exporter_services:
+        description: "Also restart nginx / exporters"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+
+jobs:
+  redeploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update demo app on both Windows VMs
+        run: |
+          EXTRA=""
+          if [ "${{ inputs.restart_exporter_services }}" = "true" ]; then
+            EXTRA="; Restart-Service nginx; Restart-Service nginx-exporter; Restart-Service windows_exporter"
+          fi
+          for vm in win-web-1 win-web-2; do
+            echo "== $vm =="
+            az vm run-command invoke \
+              --resource-group rg-monlab-monitoring \
+              --name "$vm" \
+              --command-id RunPowerShellScript \
+              --scripts "Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/${{ github.repository }}/main/app/server.js' -OutFile C:/app/server.js; Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/${{ github.repository }}/main/app/package.json' -OutFile C:/app/package.json; Restart-Service node-app$EXTRA"
+          done
