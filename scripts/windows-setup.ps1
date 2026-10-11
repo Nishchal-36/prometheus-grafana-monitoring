@@ -223,7 +223,10 @@ Remove-Item -Recurse -Force $alloyDir -ErrorAction SilentlyContinue
 Expand-Download -Url $alloyUrl -DownloadPath (Join-Path $SetupDir "alloy.archive") -Destination $alloyDir
 $alloyExe = Get-ChildItem $alloyDir -Recurse -Filter "alloy*.exe" | Select-Object -First 1
 if (-not $alloyExe) { throw "alloy.exe not found after extraction" }
-Copy-Item $alloyExe.FullName (Join-Path $ToolsDir "alloy.exe") -Force
+$alloyTarget = Join-Path $ToolsDir "alloy.exe"
+if (-not (Test-Path $alloyTarget)) {
+    Copy-Item $alloyExe.FullName $alloyTarget -Force
+}
 
 $AlloyData = "C:\ProgramData\alloy"
 New-Item -ItemType Directory -Force -Path $AlloyData | Out-Null
