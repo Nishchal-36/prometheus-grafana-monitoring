@@ -109,11 +109,15 @@ Copy-Item (Join-Path $SetupDir "nssm\nssm-2.24\win64\nssm.exe") (Join-Path $Tool
 
 # -----------------------------------------------------------------------------
 Write-Step "Node.js 24 LTS"
-$nodeIndex = Invoke-RestMethod -Uri "https://nodejs.org/dist/latest-v24.x/" -Headers @{ "User-Agent" = "monlab-setup" }
-$nodeMsi = $nodeIndex | Where-Object { $_.name -match "^node-v[\d.]+-x64\.msi$" } | Select-Object -First 1
-if (-not $nodeMsi) { throw "Could not find Node.js x64 MSI in latest-v24.x" }
-$nodeMsiPath = Join-Path $SetupDir $nodeMsi.name
-Get-FileWithRetry -Url ("https://nodejs.org/dist/latest-v24.x/" + $nodeMsi.name) -OutFile $nodeMsiPath
+# The dist folder serves an HTML listing (no JSON API for a release line), so we
+# parse the newest node-vX.Y.Z-x64.msi filename out of it.
+$nodeListing = (Invoke-WebRequest -UseBasicParsing -Uri "https://nodejs.org/dist/latest-v24.x/" -TimeoutSec 60).Content
+$nodeMsiMatch = [regex]::Match($nodeListing, "node-v[\d.]+-x64\.msi")
+if (-not $nodeMsiMatch.Success) { throw "Could not find Node.js x64 MSI in latest-v24.x listing" }
+$nodeMsiName = $nodeMsiMatch.Value
+Write-Host "Resolved Node.js MSI: $nodeMsiName"
+$nodeMsiPath = Join-Path $SetupDir $nodeMsiName
+Get-FileWithRetry -Url ("https://nodejs.org/dist/latest-v24.x/" + $nodeMsiName) -OutFile $nodeMsiPath
 Start-Process msiexec.exe -ArgumentList "/i", $nodeMsiPath, "/qn", "/norestart" -Wait
 $nodeExe = Join-Path $env:ProgramFiles "nodejs\node.exe"
 $npmCmd  = Join-Path $env:ProgramFiles "nodejs\npm.cmd"
@@ -133,7 +137,13 @@ if (Test-Path $NginxDir) {
     & (Join-Path $ToolsDir "nssm.exe") stop nginx 2>$null | Out-Null
 }
 Remove-Item -Recurse -Force $NginxDir -ErrorAction SilentlyContinue
-Move-Item (Join-Path $SetupDir "nginx-1.30.5") $NginxDir
+$nginxExtracted = Join-Path $SetupDir "nginx-1.30.5"
+if (Test-Path $nginxExtracted) {
+    Move-Item $nginxExtracted $NginxDir
+}
+elseif (-not (Test-Path (Join-Path $NginxDir "nginx.exe"))) {
+    throw "Nginx extraction failed - nginx.exe not found"
+}
 Get-FileWithRetry -Url "$RepoRawBase/windows/nginx.conf" -OutFile (Join-Path $NginxDir "conf\nginx.conf")
 New-Item -ItemType Directory -Force -Path (Join-Path $NginxDir "logs") | Out-Null
 Set-NssmService -Name "nginx" -Exe (Join-Path $NginxDir "nginx.exe") -WorkDir $NginxDir
@@ -150,7 +160,7 @@ Set-NssmService -Name "node-app" -Exe $nodeExe -Arguments "server.js" -WorkDir $
 
 # -----------------------------------------------------------------------------
 Write-Step "nginx-prometheus-exporter"
-$npeUrl = Get-GitHubAssetUrl -Repo "nginx/nginx-prometheus-exporter" -Tag "v1.5.3" -Pattern "windows_amd64"
+$npeUrl = Get-GitHubAssetUrl -Repo "nginx/nginx-prometheus-exporter" -Tag "v1.5.3" -Pattern "windows_amd64\.zip$"
 $npeDir = Join-Path $ToolsDir "nginx-exporter"
 Remove-Item -Recurse -Force $npeDir -ErrorAction SilentlyContinue
 Expand-Download -Url $npeUrl -DownloadPath (Join-Path $SetupDir "npe.archive") -Destination $npeDir
@@ -160,11 +170,11 @@ Set-NssmService -Name "nginx-exporter" -Exe $npeExe.FullName -Arguments "-nginx.
 
 # -----------------------------------------------------------------------------
 Write-Step "Grafana Alloy (logs -> Loki)"
-$alloyUrl = Get-GitHubAssetUrl -Repo "grafana/alloy" -Tag "v1.20.1" -Pattern "windows_amd64"
+$alloyUrl = Get-GitHubAssetUrl -Repo "grafana/alloy" -Tag "v1.20.1" -Pattern "alloy-windows-amd64\.exe\.zip$"
 $alloyDir = Join-Path $ToolsDir "alloy"
 Remove-Item -Recurse -Force $alloyDir -ErrorAction SilentlyContinue
 Expand-Download -Url $alloyUrl -DownloadPath (Join-Path $SetupDir "alloy.archive") -Destination $alloyDir
-$alloyExe = Get-ChildItem $alloyDir -Recurse -Filter "alloy.exe" | Select-Object -First 1
+$alloyExe = Get-ChildItem $alloyDir -Recurse -Filter "alloy*.exe" | Select-Object -First 1
 if (-not $alloyExe) { throw "alloy.exe not found after extraction" }
 Copy-Item $alloyExe.FullName (Join-Path $ToolsDir "alloy.exe") -Force
 
